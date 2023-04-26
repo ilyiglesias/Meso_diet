@@ -1,0 +1,615 @@
+---
+title: "Length data"
+output: html_notebook
+---
+Based on feedback from John Field, it was suggested that we consider including some length based information to describe mesopealgic prey (and perhaps contrast to CPS)
+NOTE: For more detail on downloading data from ERDDAP, see MesoAsPrey_ERDDAP.Rmd
+
+#update
+Started by II 1/18/23, updated 2/1/23 following feedback from John and Jarrod that the plots looked ok.
+- going to update these plots from distribution curves to regular histograms
+
+#load packages
+```{r load packages}
+
+library(tidyverse) #ggplot, dplyr etc
+library(rerddap) # accessing erddap
+library(sf) #plotting spatial objects
+```
+
+# Download LENGTH data from ERDDAP
+Whereas the original version I donwloaded has length data available for predators, there isn't length data available for prey. That requires re-downloading data directly from ERDDAP in a different format. 
+
+The only coding difference is that we write distinct=FALSE instead of true
+if true- will give individual predator with sum of prey per predator
+if false- will list indivdiual prey with length data available
+and had to change length input fields 
+```{r read data from erddap -- prey length}
+
+# Get info about dataset: food habit data
+rerddap::browse("SWFSC-CCTD", url = "https://oceanview.pfeg.noaa.gov/erddap/") #background info on data field, acknowledgements etc
+
+cctd_info <- rerddap::info(datasetid = "SWFSC-CCTD", url = "https://oceanview.pfeg.noaa.gov/erddap/") # load info on dataset
+cctd_info  # print list of variables
+
+# select for variables we are interested in: DO NOT include fields for prey size (as this may present format issue):
+food_habits_data_length <- rerddap::tabledap(cctd_info, fields = c("data_source",
+                                                                   "predator_taxa",
+                                                                  "includes_prey_size_information",
+                                                                   "latitude",
+                                                                   "longitude",
+                                                                  "predator_scientific_name",
+                                                                  "predator_common_name",
+                                                                  "prey_scientific_name",
+                                                                  "prey_common_name",
+                                                                  "prey_number",
+                                                                  "prey_weight",
+                                                                  "prey_volume",
+                                                                  "prey_measurement_back_calc",
+                                                                  "prey_length_back_calc",
+                                                                  "prey_measurement_1",
+                                                                  "prey_length_1",
+                                                                  "prey_measurement_2",
+                                                                  "prey_length_2",
+                                                                  "number_measured",
+                                                                  "prey_length_min",
+                                                                  "prey_length_max",
+                                                                  "prey_length_mean",
+                                                                  "prey_weight_indiv",
+                                                                  "prey_number_corrected_indiv",
+                                                                  "prey_size_comments")) #download ALL fields
+
+
+# Could always play around with different fields here, but I think I at least have all of the length columns available
+```
+
+Of note: 
+prey_measurement_1: describes the type of measurement and
+prey_length_1: the actual value of that measurement
+
+however, there are in some cases alternative measuremnts withint the database
+prey_measurement_2
+prey_length_2
+
+
+Next, would like to see what size info is available for meso fish...
+
+# select for mesopelagic fish prey 
+```{r}
+meso_spp # our list of mesopelagic fish spp.
+coastal_pelagic_fish # CPS forage fish
+
+
+# select for mesopelagic fish or CPS fish lengths specifically 
+lengths_meso_cps <- food_habits_data_length |> #of all available length data
+                    filter(prey_scientific_name %in% meso_spp| prey_scientific_name %in% coastal_pelagic_fish) |>  # filter for mesopelagic +cps 
+                    mutate(prey_type= ifelse(prey_scientific_name %in% meso_spp, "mesopelagic", "cps_fish")) #create a column identifying CPS or meso
+
+# what types of measurements do we have?
+unique(lengths_meso_cps$prey_measurement_2)
+# the only measurements available in prey_measurement_2 is FL or "" blank so not obtaining any extra SLs here.
+
+
+# Hmm looks like NA, SL, TL, FL and not sure what PTL or LA is?! 
+
+# Group by measurement type
+lengths_meso_cps |> 
+  group_by(prey_measurement_1) |> 
+  summarise(n=n())
+
+
+# of these measurements, there are 1449 total lengths and 953 SLs 
+
+lengths_meso_cps |> 
+  group_by(prey_common_name, prey_scientific_name, prey_measurement_1) |> 
+  filter(prey_measurement_1 !="") |> # remove blanks with no info
+  summarise(n=n()) |>  # total number of records of prey measurements per spp and measurement type
+  filter(prey_measurement_1=="TL")
+
+
+```
+So there isn't a lot of consistency in length measurements. 
+
+
+TO CONVERT TL TO SL:
+
+myctophid (Myctophidae) 7
+Northern Anchovy: SL= 0 + 0.853*TL
+Northern Lampfish: SL= 0+ 0.843*TL
+Pacific Herring: SL=0+ 0.850
+Pacific Sardine: SL=0+ 0.814TL  SL=0+ 0.843TL (mean of 0.814 and 0.843)---- SL=0+0.8285TL (not clear difference between two estimates)
+snipe eel (Nemichthyidae) 5
+
+TO CONVERT FL to SL: 
+
+Rosenblattichthys volucris: no length info
+Magnisudis atlantica: no FL conversation (only SL to TL)
+Engraulis mordax:  SL =0 +	0.942 *FL
+Leuroglossus schmidti: no FL to SL conversion (only FL and SL to TL):
+        Convert from FL to TL:  TL= 0 + 1.039FL
+        Convert from SL to TL:  TL= 0 + 1.119SL
+        so SL= 0.928 FL
+Scomber japonicus: SL=	2.330+	0.860	FL 
+                   SL= 	0.000 +	0.903	FL (take mean of two equations?)
+                   SL= 1.165 + 0.8815 FL
+Trachurus symmetricus:SL= 0+ 0.954FL
+
+Sardinops sagax: SL= 0+ 0.941FL
+                 SL= 0+ 0.942FL
+                 SL= 0+ 0.944FL
+Combined: SL=0 + 0.942FL
+Lestidiops ringens: NO length conversion available
+
+Tetragonurus cuvieri: two equations for FL to TL and SL to TL so can combine
+                   convert from FL to TL: TL 	0.000 	1.053 	FL 	
+                   convert from SL to TL: TL 	0.000 	1.138 	SL
+                   so: SL= 0+ 0.925FL 
+Arctozenus risso:
+convert FL to TL: TL 	0.000 	1.047 	FL
+convrt SL to TL: TL 	0.000 	1.065 	SL
+so: SL= 0+ 0.983FL
+
+Lampadena urophaos: Only SL to TL so can't calculate
+
+https://www.fishbase.de/manual/english/PDF/FB_Book_CBinohlan_Length-Length_RF_JG.pdf
+For fishbase values per spp
+Search for specific spp
+
+
+#  Try to find ANY length info - combine different measurements 
+NOTE: unique(lengths_meso_cps$prey_measurement_back_calc) # the only backcalculated values are SL or "" blank
+So we can substitute the back-calculated value of SL 
+
+```{r}
+# Find available SL measurements per prey item
+# First look to length measurement 1, if not, use backcalculated values
+# then use FL or TL measurements and convert
+
+lengths_meso_cps$length<- ifelse(lengths_meso_cps$prey_measurement_1=="SL", lengths_meso_cps$prey_length_1, lengths_meso_cps$prey_length_back_calc)
+lengths_meso_cps$length <- as.numeric(lengths_meso_cps$length) #convert to numeric
+
+#list the type of measurement used-- if measured SL, list otherwise, backcalcualted value 
+lengths_meso_cps$length_type <- ifelse(lengths_meso_cps$prey_measurement_1=="SL", lengths_meso_cps$prey_measurement_1, paste0(lengths_meso_cps$prey_measurement_back_calc, "_bc" ))
+
+#convert to a dataframe to avoid some weirdness below- was imported as tabledap
+lengths_meso_cps <- as.data.frame(lengths_meso_cps) 
+
+# Convert missing (NaN) values from our length columns (which includes SL measured or if absent, SL backcalculated)- easier to recognize
+lengths_meso_cps$length[is.nan(lengths_meso_cps$length)]<-NA
+
+```
+
+
+# OKAY, now to fill in missing length values for those prey items lacking SL 
+
+So far I created the col "length": which includes either a measured SL in mm or a backcalculated standard length
+Next, for those rows that don't have an associated SL value (ie NA), estimate a SL from either TL or FL estimates
+
+
+```{r}
+
+
+# Now filter for those values that are missing SL measurement-- still 23,292
+  lengths_missing <- lengths_meso_cps |> 
+  filter(is.na(length))
+
+
+```
+
+# Would like to provide an SL estimate in those cases where either TL or FL were measured (and we have a conversion from fishbase)
+
+Starting with FL
+
+# ESTIMATE SL FROM TL
+The following taxa had in some cases a measure of TL but not SL the follwing is taxa specifci conversions
+
+Myctophid: no conversion, not spp specific
+Northern Anchovy: SL= 0 + 0.853*TL
+Northern Lampfish: SL= 0+ 0.843*TL
+Pacific Herring: SL=0+ 0.850
+Pacific Sardine: SL=0+ 0.814TL  SL=0+ 0.843TL (mean of 0.814 and 0.843)---- SL=0+0.8285TL (not clear difference between two estimates)
+snipe eel (Nemichthyidae): no conversion, not species specific
+
+
+# ESTIMATE SL FROM FL
+Engraulis mordax:  SL =0 +	0.942 *FL
+Leuroglossus schmidti: SL= 0.928 FL
+Scomber japonicus: SL= 1.165 + 0.8815 FL * because Fishbase in cm and this has an additive term that we can convert from 1.165 to 11.65?
+This doesn't feel right and is 
+Trachurus symmetricus:SL= 0+ 0.954FL
+Sardinops sagax: SL=0 + 0.942FL
+Tetragonurus cuvieri: SL= 0+ 0.925FL 
+Arctozenus risso: SL= 0+ 0.983FL
+
+
+This should be able to work with case_when() but the function wouldn't recognize my calculations in the second term, so sticking with clunky but works ifelse statements :) 
+```{r}
+# convert lengths from character to numeric so we can do math on them
+lengths_meso_cps$prey_length_1 <- as.numeric(lengths_meso_cps$prey_length_1)
+lengths_meso_cps$prey_length_2 <- as.numeric(lengths_meso_cps$prey_length_2)
+
+# CONVERT TL estimates to SL (for taxa with available conversions):This is awkward coding, I am aware, but best I can do
+
+# Anchovy
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="TL"& lengths_meso_cps$prey_common_name=="Northern Anchovy", lengths_meso_cps$prey_length_1*0.853, lengths_meso_cps$length)  
+#Northern Lampfish
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="TL"& lengths_meso_cps$prey_common_name=="Northern Lampfish", lengths_meso_cps$prey_length_1*0.843, lengths_meso_cps$length)  
+#Pacific Herring
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="TL"& lengths_meso_cps$prey_common_name=="Pacific Herring", lengths_meso_cps$prey_length_1*0.850, lengths_meso_cps$length)  
+#Pacific Sardine
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="TL"& lengths_meso_cps$prey_common_name=="Pacific Sardine", lengths_meso_cps$prey_length_1*0.850, lengths_meso_cps$length)  
+
+
+
+
+# CONVERT FL estimates to SL (for taxa with available conversions):for those missing SL info
+
+# Anchovy
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="FL"& lengths_meso_cps$prey_scientific_name=="Engraulis mordax", lengths_meso_cps$prey_length_1*0.942, lengths_meso_cps$length)  
+# Leuroglossus schmidti
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="FL"& lengths_meso_cps$prey_scientific_name=="Leuroglossus schmidti", lengths_meso_cps$prey_length_1*0.928, lengths_meso_cps$length) 
+# Trachurus symmetricus:SL= 0+ 0.954FL
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="FL"& lengths_meso_cps$prey_scientific_name=="Trachurus symmetricus", lengths_meso_cps$prey_length_1*0.954, lengths_meso_cps$length) 
+# Sardinops sagax: SL=0 + 0.942FL
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="FL"& lengths_meso_cps$prey_scientific_name=="Sardinops sagax", lengths_meso_cps$prey_length_1*0.942, lengths_meso_cps$length) 
+# Tetragonurus cuvieri: SL= 0+ 0.925FL 
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="FL"& lengths_meso_cps$prey_scientific_name=="Tetragonurus cuvieri", lengths_meso_cps$prey_length_1*0.925, lengths_meso_cps$length) 
+# Arctozenus risso: SL= 0+ 0.983FL
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="FL"& lengths_meso_cps$prey_scientific_name=="Arctozenus risso", lengths_meso_cps$prey_length_1*0.983, lengths_meso_cps$length) 
+# Scomber japonicus: SL= 11.65 + 0.8815 FL
+lengths_meso_cps$length <- ifelse(lengths_meso_cps$prey_measurement_1=="FL"& lengths_meso_cps$prey_scientific_name=="Scomber japonicus", lengths_meso_cps$prey_length_1*0.8815+11.65, lengths_meso_cps$length) 
+
+
+
+# Checked output for each species as I went and all looks good!
+
+# Update length_type column- type of measurement
+
+# Update the length_type columns (how SL value was obtained either: SL measured SL, SL_bc: backcalculated or SL_est_TL or SL_est_FL)
+# if length_type value was _bc (which means no measured SL or backcalculated SL), 
+lengths_meso_cps$length_type <- ifelse(lengths_meso_cps$length_type=="_bc", paste0("SL_est_", lengths_meso_cps$prey_measurement_1), lengths_meso_cps$length_type)
+# THEN remove those values that we are not converting from (ie if not TL or FL) 
+lengths_meso_cps$length_type[lengths_meso_cps$length_type %in% c("SL_est_", "SL_est_PTL", "SL_est_LA")]<- NA
+# check that updated correctly:
+unique(lengths_meso_cps$length_type) # looks good: options are "SL" "Sl_bc" "NA" "SL_est_TL" or "SL_est_FL"
+
+
+```
+
+WOOHOO now have a fully updated df with the column length (SL in mm) and length_type (either measured, backcalcualted or estimated from a different length measurement)
+
+# still missing 21,794 lengths for prey items
+but have a total of 27,460 records of length for both cps fish and mesopealgic fish prey!
+
+```{r}
+
+# I went thru and did a series of checks ot ensure that there wasn't an avaialble length in prey_measurement_2
+# only a total of 13 values where there wasn't a SL estimate from measurement, back calculation or estimate from other length but was info on FL, TL or SL in prey_measurement_2
+
+
+lengths_meso_cps |> 
+  filter(is.na(length) & prey_measurement_2=="FL") 
+
+# Fill in these couple remaining length gaps: using the FL in prey_length_2 column when NA in length
+
+#Northern smoothongue 
+lengths_meso_cps$length <- ifelse(is.na(lengths_meso_cps$length)& lengths_meso_cps$prey_measurement_2=="FL" & lengths_meso_cps$prey_common_name=="Northern Smoothtongue", lengths_meso_cps$prey_length_2*0.928, lengths_meso_cps$length)
+# Northern Lampfish Stenobrachius leucopsarus: SL= 0.914 FL 
+lengths_meso_cps$length <- ifelse(is.na(lengths_meso_cps$length)& lengths_meso_cps$prey_measurement_2=="FL" & lengths_meso_cps$prey_common_name=="Northern Lampfish", lengths_meso_cps$prey_length_2*0.914, lengths_meso_cps$length)
+# Slender Blacksmelt Bathylagus pacificus: 0.964 FL (combined from TL calculations)
+lengths_meso_cps$length <- ifelse(is.na(lengths_meso_cps$length)& lengths_meso_cps$prey_measurement_2=="FL" & lengths_meso_cps$prey_common_name=="Slender Blacksmelt", lengths_meso_cps$prey_length_2*0.964, lengths_meso_cps$length)
+# Pacific Herring Clupea pallasii pallasii: 0.926 FL
+lengths_meso_cps$length <- ifelse(is.na(lengths_meso_cps$length)& lengths_meso_cps$prey_measurement_2=="FL" & lengths_meso_cps$prey_common_name=="Pacific Herring", lengths_meso_cps$prey_length_2*0.926, lengths_meso_cps$length)
+
+
+
+# from 13 down to 6 - i feel like I have done everythign I can here to provide as much data as possible!!
+
+```
+
+# ESTIMATE SL FROM FL 
+For those species that didn't have a measured, backcalculated SL but DID have prey_measurement_2 data available
+
+Pacific Viperfish Chauliodus macouni: no length conversion available
+Northern Smoothtongue Leuroglossus schmidti: SL= 0.928 FL
+Northern Lampfish Stenobrachius leucopsarus: SL= 0.914 FL
+Slender Blacksmelt Bathylagus pacificus: 0.964 FL (combined from TL calculations)
+Pacific Herring Clupea pallasii pallasii: 0.926 FL
+Blue Lanternfish Tarletonbeania crenularis: no length conversion available on fishbase
+myctophid: generic, no taxa specific conversion available
+
+# REMOVE those remaining records that still don't have length data available (SL): measured SL, backcalculated SL or estimated SL from FL or TL
+```{r}
+lengths_meso_cps <- lengths_meso_cps |> 
+                  filter(!is.na(length))
+```
+
+
+
+# ESTIMATE the mean length per family of mesopelagic fish 
+
+```{r}
+# JOIN prey FAMILY based on prey common name
+
+
+lengths_meso_cps <- left_join(lengths_meso_cps, select(prey_taxonomy, family, prey_scientific_name), by="prey_scientific_name")
+
+```
+
+
+
+# FINALLY PLOT size frequency for mesopelagic and cps fish species -- density plot
+
+```{r}
+
+
+# Plot of length distribution cps and meso
+ggplot(data=lengths_meso_cps, aes(x=length, group=prey_type, color=prey_type))+
+  geom_density()+
+  scale_color_manual(values=c("#a6611a","#018571"))+
+  labs(color="Prey type", x="Length (mm)", y="Density", size=2 )+
+  theme(panel.background = element_blank(),
+        legend.key =   element_blank())
+
+ggsave("size_freq_meso_cps.pdf")
+
+```
+
+# IF we want to look at CPS eaten by the same species that also ate mesopelagic species, then we simply first select by predator species
+
+```{r}
+lengths_meso_cps_meso_preds <-lengths_meso_cps |> 
+                              filter(predator_scientific_name %in% meso_pred_spp)
+
+
+lengths_meso_cps_meso_preds
+
+# PLOT histogram of COUNT
+ggplot(data=lengths_meso_cps_meso_preds, aes(x=length, group=prey_type))+
+  geom_histogram(aes(fill=prey_type), color="black",alpha=0.25, position = "nudge", bins = 25)+ #position nudge doesn't stack the output which is good!
+  labs(fill="Prey type", x="Length (mm)", y="Number of fish", size=2 )+
+  scale_x_continuous(expand=c(0,0), breaks=seq(0, 500, by=50))+
+  scale_y_continuous(expand=c(0,100))+
+  scale_fill_manual(values=c("#a6611a", "#018571"), labels=c("Coastal pelagic fish", "Mesopelagic fish"))+
+  ggthemes::theme_few()+
+  theme(legend.position = c(.85, .75))
+
+
+# PLOT histogram DENSITY
+ggplot(data=lengths_meso_cps_meso_preds, aes(x=length, group=prey_type))+
+  geom_histogram(aes(fill=prey_type, y=..density..), position = "nudge", color="black", bins = 25, alpha=0.5)+ #position nudge doesn't stack the output which is good!
+  labs(fill="Prey type", x="Length (mm)", y="Density", size=2 )+
+  scale_x_continuous(expand=c(0,0), breaks=seq(0, 500, by=50))+
+  scale_y_continuous(expand=c(0.0002,0.0002))+
+  scale_fill_manual(values=c("#a6611a", "#018571"), labels=c("Coastal pelagic fish", "Mesopelagic fish"))+
+  labs(color="Prey type")+
+  ggthemes::theme_few()+
+  theme(legend.position = c(.85, .75))
+
+
+ggsave("./plots/size_freq_meso_cps.pdf")
+
+
+```
+Predator spp with length info
+ [1] "Alopias superciliosus"    "Alopias vulpinus"          "Anoplopoma fimbria"        "Delphinus delphis bairdii"
+ [5] "Delphinus delphis delphis" "Dosidicus gigas"           "Isurus oxyrinchus"         "Lissodelphis borealis"    
+ [9] "Merluccius productus"      "Oncorhynchus kisutch"      "Oncorhynchus mykiss"       "Oncorhynchus tshawytscha" 
+[13] "Prionace glauca" ###          "Sebastes alutus"           "Sebastes flavidus"         "Sebastolobus alascanus"   
+[17] "Sebastolobus altivelis"    "Thunnus alalunga"          "Thunnus orientalis"        "Xiphias gladius"          
+[21] "Zalophus californianus"   
+
+
+Pred spp that ate meso fish
+[1] "Albatrossia pectoralis"     "Alopias superciliosus"      "Alopias vulpinus"           "Anoplopoma fimbria"        
+ [5] "Atheresthes stomias"        "Bathyraja kincaidii"        "Beringraja binoculata"      "Beringraja inornata"       
+ [9] "Beringraja rhina"           "Callorhinus ursinus"        "Delphinus delphis bairdii"  "Delphinus delphis delphis" 
+[13] "Dosidicus gigas"            "Gonatidae"                  "Histioteuthidae"            "Isurus oxyrinchus"         
+[17] "Lagenorhynchus obliquidens" "Lissodelphis borealis"      "Merluccius productus"       "Microstomus pacificus"     
+[21] "Oncorhynchus kisutch"       "Oncorhynchus mykiss"        "Oncorhynchus tshawytscha"   "Onychoteuthidae"           
+[25] "Sebastes alutus"            "Sebastes brevispinis"       "Sebastes flavidus"          "Sebastes mystinus"         
+[29] "Sebastes pinniger"          "Sebastolobus alascanus"     "Sebastolobus altivelis"     "Thunnus alalunga"          
+[33] "Thunnus orientalis"         "Trachurus symmetricus"      "Xiphias gladius"            "Zalophus californianus"  
+
+Double checked and the predators that we had length data for were all, with the exception of hte blue blue shark Prionace glauca recorded as having eaten mesopealgic fishes
+- not quite sure why so few meso fish were measured 3267 compared to 27467 in database, but so it goes!
+
+# PLOT of mesopelagic length distriubtion by family--- density plot
+
+```{r}
+
+ggplot(data=filter(lengths_meso_cps_meso_preds, prey_type=="mesopelagic"), aes(x=length, group=family, color=family))+
+  geom_density()+
+  labs(color="Prey type", x="Length (mm)", y="Density", size=2 )+
+  theme(panel.background = element_blank(),
+        legend.key =   element_blank())
+
+ggsave("size_freq_meso_cps.pdf")
+
+# should probably remove those records where only one species represented - can 't do a distribution with 1 value
+# the following code removes those values with 3 or less records per family! Next closest min is 6 so should be all good!
+
+# determine which families had less than 10 length values 
+lengths_meso_cps_meso_preds |> 
+  group_by(family) |> 
+  summarise(count=n()) |> 
+  filter(count<= 10)
+
+lengths_meso_morethan10 <- lengths_meso_cps_meso_preds |> 
+                          filter(prey_type=="mesopelagic") |> 
+                          filter(family != "Sternoptychidae") |> 
+                          filter(family != "Anotopteridae") |> 
+                          filter(family != "Gonostomatidae") |> 
+                          filter(family != "Stomiidae")
+  
+  
+  
+# plot length distribution of mesopealgic fish families--- density plot--------
+# need to add total # of lengths per spp
+
+ggplot(data=lengths_meso_morethan10, aes(x=length, group=family, color=family))+
+  geom_density()+
+  scale_color_viridis_d(option="D", labels=c("Bathylagidae (410)", "Microstomatidae (22)", "Myctophidae (2580)", "Paralepididae (223)", "Tetragonuridae (22)"))+
+  labs(color="Mesopelagic fish family", x="Length (mm)", y="Density", size=2 )+
+  ggthemes::theme_few()+
+  theme(legend.position = c(0.8, 0.75))
+
+
+
+ggsave("./plots/lengths_meso_families.pdf")
+```
+#COMBINE our two plots into one succinct plot
+
+```{r}
+library(patchwork)# to combine multiple plots
+
+
+#because I want to ensure the plot isn't entirely dominated by the legends I have to play around with formating so leaving originals intact above
+
+#CPS plot
+p1= ggplot(data=lengths_meso_cps_meso_preds, aes(x=length, group=prey_type))+
+  geom_histogram(aes(fill=prey_type, y=..density..), color="black",alpha=0.25, position = "nudge", bins = 25)+ #position nudge doesn't stack the output which is good!
+  labs(fill="Prey type", x="Length (mm)", y="Density", size=2 )+
+  scale_x_continuous(expand=c(0,0), breaks=seq(0, 500, by=50))+
+  #scale_y_continuous()+
+  scale_fill_manual(values=c("#a6611a", "#018571"), labels=c("Coastal pelagic fish", "Mesopelagic fish"))+
+  ggthemes::theme_few()+
+  theme(legend.position = c(.80, .75))
+# Meso family plot
+p2= ggplot(data=lengths_meso_morethan10, aes(x=length, group=family, color=family))+
+  geom_density()+
+  scale_color_viridis_d(option="D", labels=c("Bathylagidae (410)", "Microstomatidae (22)", "Myctophidae (2580)", "Paralepididae (223)", "Tetragonuridae (22)"))+
+  labs(color="Mesopelagic fish family", x="Length (mm)", y="Density", size=2 )+
+  ggthemes::theme_few()+
+  theme(legend.position = c(0.8, 0.75))
+
+
+p1+p2
+
+p=p1+p2
+
+ggsave(filename = "./plots/length_combined.pdf", plot=p, height=15, width=30, units="cm") # save plot 
+```
+
+
+
+# Range of lengths
+```{r}
+
+p=lengths_meso_cps_meso_preds |> 
+  filter(prey_type=="cps_fish")
+
+range(p$length) #mesopelagic prey length range: 11-466 mm
+                # 2-505 mm
+
+```
+
+
+# And as a histogram
+
+```{r}
+
+ggplot(data=lengths_meso_morethan3, aes(x=length, group=family))+
+  geom_histogram(aes(fill=family), color="black", alpha=0.25, position="nudge", bins=25)+
+  scale_fill_viridis_d(option="D")+ #set color scale
+  labs(fill="Mesopelagic fish family", x="Length (mm)", y="Number of fish", size=2 )+
+  scale_x_continuous( expand= c(0,10), breaks=seq(0, 500, by=25))+
+  #scale_y_continuous(expand=c(0,10))+
+  ggthemes::theme_few()+
+  theme(legend.position = c(.85, .75))
+
+
+```
+
+
+
+
+
+
+
+
+
+
+#####################################
+II YOU ARE HERE!!!
+#####################################
+
+
+
+
+
+ 
+# Look at size distribution by mesopealagic family
+NOTE: total of 3267 mesopelagic fish with lengths
+```{r}
+lengths_meso <- lengths_meso_cps |> 
+                filter(prey_type=="mesopelagic")
+
+# PLOT meso lengths- not very informative! 
+ggplot(data=lengths_meso, aes(x=length, group=family, color=family))+
+  geom_density()+
+  scale_color_viridis_d()+
+  labs(color="Prey type", x="Length (mm)", y="Density", size=2 )+
+  facet_wrap(~family)+
+  theme(panel.background = element_blank(),
+        legend.key =   element_blank())
+
+ggsave("size_freq_meso_family.pdf")
+
+
+# Create a table of mean lengths per family-- only mesopelagic fishes?
+ lengths_meso |> 
+  group_by(family) |> 
+  summarise(mean_SL=mean(length), sd_SL= sd(length), n_SL=n()) |> 
+  mutate(se_SL=sd_SL/sqrt(n_SL)) #calculate se of the mean as standard deviation divided by the sqrt of sample size n
+
+# Create a table of mean lengths per family- meso and cps
+mean_SL_family <- lengths_meso_cps_meso_preds |> 
+  group_by(family) |> 
+  summarise(mean_SL=round(mean(length), 2), sd_SL= round(sd(length), 2), n_SL=n()) |> 
+  mutate(se_SL=round(sd_SL/sqrt(n_SL),2)) #calculate se of the mean as standard deviation divided by the sqrt of sample size n
+
+# export these values as a table
+write.csv(mean_SL_family, "lengths_family.csv")
+# Separate table for CPS species and Mesopelagic taxa
+
+# Mesopelagic taxa
+# Create a table of mean lengths per family- meso and cps
+ lengths_meso <-  lengths_meso_cps_meso_preds |> 
+  filter(prey_type=="mesopelagic") |> 
+  group_by(prey_scientific_name) |> 
+  summarise(mean_SL=round(mean(length), 2), sd_SL= round(sd(length), 2), n_SL=n()) |> 
+  mutate(se_SL=round(sd_SL/sqrt(n_SL),2)) #calculate se of the mean as standard deviation divided by the sqrt of sample size n
+  
+
+
+# export these values as a table
+write.csv(lengths_meso, "lengths_meso.csv")
+
+
+# CPS taxa (that were consumed by our mesopealgic predator taxa= all but one record :)
+# Create a table of mean lengths per family- meso and cps
+ lengths_cps <-  lengths_meso_cps_meso_preds |> 
+  filter(prey_type=="cps_fish") |> 
+  group_by(prey_scientific_name) |> 
+  summarise(mean_SL=round(mean(length), 2), sd_SL= round(sd(length),2), n_SL=n()) |> 
+  mutate(se_SL=round(sd_SL/sqrt(n_SL), 2)) #calculate se of the mean as standard deviation divided by the sqrt of sample size n
+ 
+ # export these values as a table
+write.csv(lengths_cps, "lengths_cps.csv")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
