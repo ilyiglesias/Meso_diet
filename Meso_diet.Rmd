@@ -19,7 +19,7 @@ Dataset ID: SWFSC-CCTD_predator_taxonomy # predator taxonomy
 Dataset ID: SWFSC-CCTD_prey_taxonomy #prey taxonomy
 
 # Project background:
-This project was created by Ily Iglesias (UCSC/NOAA), to quantify the role of mesopelagic organisms as prey to higher trophic level predators within the California Current. Using the "California Current Trophic Database" data, the following code is an analysis to determine what the frequency of occurrence of mesopelagic prey is for a diversity of predators and in so doing highlight the value of Mesopelagic fishes as prey for higher trophic level predators.
+This project was created by Ily Iglesias (UCSC/NOAA), to quantify the role of mesopelagic organisms as prey to higher trophic level predators within the California Current. Using the "California Current Trophic Database" data, the following code is an analysis to determine what the frequency of occurrence of mesopelagic prey is for a diversity of predators and in so doing highlight the value of Mesopelagic fishes as prey. NOTE: this code includes accessing data and creating all of the frequency of occurance plots however, it omits the mapping component of our project as we included data not publicially available due to specific species sensitivities.
 
 # Data description:
 I exported the following data from the ERDDAP server 
@@ -51,7 +51,7 @@ Dataset ID: SWFSC-CCTD_glossary #glossary
 Dataset ID: SWFSC-CCTD_predator_taxonomy # predator taxonomy
 Dataset ID: SWFSC-CCTD_prey_taxonomy #prey taxonomy
 
-From Lynn: dataset isn't on COASTWATCH erddap URL, rather on "oceanview", so need to update base URL 
+Dataset isn't on COASTWATCH erddap URL, rather on "oceanview", so need to update base URL 
 https://oceanview.pfeg.noaa.gov/erddap/tabledap/SWFSC-CCTD.htmlTable...
 
 ```{r read data from erddap}
@@ -125,24 +125,9 @@ food_habits_data <- food_habits_data |>
   filter(prey_contents!="no") #removes 13,264 records where there were no prey contents
 
 ```
-Could also filter with; filter(prey_scientific_name!= "") # remove those records with no info about prey item which is just a result of having no prey in a particular sample (ie would accomplish the same thing)
 
-NOTE: distinct=TRUE exports the data in the original SQL format (each row corresponds to a given prey taxa summarized per predator) as opposed to if we export size information where each row corresponds to an indivdual prey item (with multiple rows per taxa corresponding to each measured prey item). 
+NOTE: distinct=TRUE exports the data in the original SQL format (each row corresponds to a given prey taxa summarized per predator) as opposed to if we export size information where each row corresponds to an individual prey item (with multiple rows per taxa corresponding to each measured prey item). 
 
-food_habits_data: 240,869 initiallly imported
-food_habits_data after removing records with prey_contents=="no" (blank) filter for blank stomachs
-prey_composition: 227,605 final number of records (obs) 
-
-# To double check with original datatable
-This was just a check to compare the original data I received with the publically available ERDDAP version. These records are consistent so can be ignored.
-```{r original record for comparison}
-# for reference: read original prey_composition table
-prey_composition <- read.csv("./Diet_Access/prey_composition.txt", header = TRUE, sep = ",")
-# colmns from prey_composition data 
-colnames(prey_composition)
-# Extract prey_composition table data from ERDDAP: only original fields
-
-```
 
 # Read in additional datasets from ERDDAP URL:
 Dataset ID: SWFSC-CCTD_glossary #glossary
@@ -169,96 +154,11 @@ prey_taxonomy <- rerddap::tabledap(cctd_prey_tax_info) #load data into df
 rm(cctd_glossary_info, cctd_info, cctd_pred_tax_info, cctd_prey_tax_info)
 ```
 
-# Read in data- from tables exported from ERDDAP-- This is just for reference, ignore
-Read in our three separate .csv files created from the access dataset Joe sent along
-NOTE: would need to unselect for size data (and then download seperately) to maintain same formating as original SQL (access for me) data
-```{r read in data}
-food_habits_data <- read.csv("./ERDDAP/food_habits_data.csv", header = TRUE, sep = ",")
-glossary <- read.csv("./ERDDAP/glossary.csv", header = TRUE, sep = ",")
-prey_taxonomy <- read.csv("./ERDDAP/prey_taxonomy.csv", header = TRUE, sep = ",")
-predator_taxonomy <- read.csv("./ERDDAP/predator_taxonomy.csv", header = TRUE, sep = ",")
-
-```
-
 # Mesopelagic species of prey fish:
-prey_taxonomy: is a list of 1659 spp comprising ALL prey species in the database. There is info from kingdom to spp when available but doesn't have a broad category for "fishes". The excel spreadsheet that Joe originally provided had a category for "fish" in the column "General_20" which isn't present in the erddap database, so I loaded the .xlsx file and merged this column to the Prey_taxonomy df then selected by "fish" to create our starting point for id-ing fish prey as mesoeplagic. I exported this list of prey spp as "AllFish.csv" and then manually went through each record and determined which were mesopelagic. Because the prey spp list from ERDDAP is the same as it was in ACCESS database, with the exception of the removal of Nannobrachium ritteri (whose name has been changed to Lampanyctus ritteri, also in database and which I had already removed from the list of species previously and JOE removed entirely on the updated ERDDAP version), i am not updating the mesopealgic fish list. 
-
-# only run if plan to export list of all fish prey taxa!
-*** II TO DO: if I post this online, I don't think I need to include this piece of code as it references extra info sent independently from Joe and not publicly available. This is just to export "fish" category and not necessary to the rest of the project. 
-```{r create list of prey fish spp to export}
-#ensure these are unique prey records
-length(unique(prey_taxonomy$prey_scientific_name))
-
-# look for duplicate spp- only Nans
-prey_taxonomy %>%
-  group_by(prey_scientific_name)%>%
-  filter(n()>1)
-
-
-Prey_List<- read.csv("PreyList.csv", header = T, sep = ",") # file from Joe stored in folder
-
-Prey_List <- Prey_List %>%
-             rename(prey_scientific_name=Prey_Sci_Name)
-
-prey_taxonomy <- left_join(prey_taxonomy, select(Prey_List, prey_scientific_name, General_20), by=("prey_scientific_name"))
-#remove Prey_list once done
-
-# make sure every record has a "General_20" value so I am not missing any fish spp- great, only the 2 na entries 
-prey_taxonomy %>%
-  filter(is.na(General_20))
-
-
-# Select for only fishes from our prey list and export as a .csv
-# Export list of fish as .csv-- this is all prey fish species
-AllFish <- prey_taxonomy %>%
-  arrange(prey_scientific_name)%>%
-  filter(General_20=="fish")
-
-#  write.csv(AllFish, file="All_fish_database_erddap.csv")
-rm(AllFish)
-
-#double checked that all updated- all good! 
-filter(prey_taxonomy, prey_scientific_name=="Lampanyctus ritteri")
-```
-
-# Manually go through list and determine which species can be considered "mesopelagic"-- Just for reference
-I went through each spp and spp group on the exported "AllFish" list (changing this to an .xlsx file called Fish_list.xlsx. The final .csv of mesopelagic fish spp is "Meso_fish.csv" which I plan to make available in publication). For each record, I first looked up the record in Fishbase (or wikipedia in the case where it was a braoder species grouping) and using the depth criteria available there, recorded this in the depth_category field. In Fishbase, most mesopealgic species were listed as either: "bathypelagic" and/or "pelagic-oceanic." 
-
-From Fishbase glossary:
-"Bathypelagic": "Region of the ocean zone between 1,000m to 4000mm; between the mesopelagic layer above and the abyssopelagic layer below. Living or feeding in open waters at depths between 1,000 and 4000m. In FishBase this term is used to include the depth range from 200m to the bottom and thus the zones mesopelagic, bathypelagic and abyssopelagic. (Mesopelagic: pertaining to the region of the oceanic zonef rom 200-1000m a middle layer of the ocean between the epipelagic and bathypelagic layers. Living or feeding at midwater at depths between 200-1000m. Generally characterized by dim light and steep temperature gradients)"
-
-"oceanic-pelagic": oceanic- pertaining to the open ocean beyond the continental shelf; living in the open ocean; offshore. Opposite of neritic and pelagic--"Living and feeding in the open sea; asssociated with the surface or middle depths of a body of wtaer; free swimming in the seas, oceans or open waters; not in association with the bottom. 
-
-Where there was some uncertainty in these designations, I additionally looked up the taxon in question in Eschemeyer's 1983 "Pacific Coast Fishes"(especially good for broader categories) + Miller and Lea's 1972 "Guide to the coastal marine fishes of California" as well as "Deep-Sea Fishes" by Monte Preide and in some cases the broader literature (via Google scholar, searching by spp name). 
-
-For broader categories, I chose depth criteria based on existing spp in the list, descriptions of said taxon (family, genus etc, espeically from Eschemeyer), looking though other representative spp in Fishbase and best judgement. If there were cases where a broader taxon contained spp that were not mesopealgic, I chose to not include that general taxon in the mesopealgic database, as we are interested in general taxons that are all mesopealgic. 
-
-"Mesopelagic" was also defined for those with daytime depth distributions between 200m-1000m during their adult stage (ie juveniles may live in epipealgic or inshore). 
-
-Meso_fish.csv :From the .xlsx doucment above, I created a separate .csv with only those spp considered mesopelagic. However, I also added depth range and depth category information for ALL fish spp in the dataset (Fish_list.xlsx) that I can always ref later (if for example I want to later look at deep-sea, demersal spp "bathydemersal")
-
-
-I added the following columns:
-
-Common_name: the common name listed in Fishbase
-Depth_category: These terms come from fishbase who defined the following options to describe a fish spp (additional terms went in depth_notes)
-Depth_min: the minimum listed range (in m)
-Depth_max: the maximum listed range (first from Fishbase) * not availble for categories above spp level.
-Depth_ref: I started all searches with Fishbase, but when not available, list ref (Miller and Lea, Eschemeyer or literature!)
-Depth_comments: additional information about a given prey category available adn the decision to categorize it as "mesopelagic" 
-
-
-Other definitions from Fishbase's glossary for reference:
-"Demersal": "Sinking to or lying on the bottom; living on or near the bottom and feeding on benthic organisms"
-"bathydemersal": Living and feeding on the bottom below 200m. 
-"pelagic-neritic":neritic- the shallow pelagic zone over the continental shelf; nearshore ocean ecosystems (coast associated)
-"bentho-pelagic" Living and feeding near the bottom as well as in midwaters or near the surface. Feeding on benthic as well as free swimming organisms. Many freshwater fish are opportunistic feeders that forage on the bottom as well as in midwater and near the surface, also pertaining to forms which hover or swim just over the floor of the ocean, the depth zone about 100m off the bottom at all depths below the edge of the continental shelf. NOT considering this category mesopelagic. 
-
-https://www.fishbase.se/search.php
-
+Provided in repository as Meso_fish.csv
+This is a list of species that we consider to be mesopelagic (although also includes species that extend well into the bathypelagic). Details of this list and how it was created can be found in our publication and supplemental information. 
 
 #Read in list of meso spp
-The finished list of meso fish spp is "Meso_fish.csv"
 
 ```{r}
 meso_fish <- read.csv("Meso_fish.csv", header = T)
@@ -297,9 +197,9 @@ Below we:
 - Calculate: Total # of stomachs per pred spp with meso prey
 - Calculate: Total # of stomachs per pred spp (containing all prey items)
 
-NOTE: Each row represents a prey category. Thus, we can't take a simple n() to calculate the number of stomachs per spp, because multiple rows may represent the same predator if they had multiple mesopelagic spp in their gut (ie look at Predator_ID 2032) thus we need to summarize by Predator_ID (which is an individual predator of a given spp) to get unique # of predators
+NOTE: Each row represents a prey category. Thus, we can't take a simple n() to calculate the number of stomachs per spp, because multiple rows may represent the same predator if they had multiple mesopelagic spp in their gut thus we need to summarize by Predator_ID (which is an individual predator of a given spp) to get unique # of predators
 
-```{r calculate number of guts with meso prey and total number of guts per spp}
+```{r calculate number of diet samples with meso prey and total number of diet samples per spp}
 
 # Calculate number of stomachs with meso prey per spp (so for each species, how many unique predator IDs?)
 stomach_summary_meso <- prey_composition_meso %>% #prey that is mesopelagic
@@ -321,33 +221,12 @@ FO <- left_join(stomach_summary_meso, stomach_summary_all, by="predator_scientif
 rm(stomach_summary_meso, stomach_summary_all)
 ```
 
-FO (instead of %F): frequency of occurrence was calculated as the # of stomachs with meso spp out of the total # of (non-empty) stomachs for that spp 
-
-We know that these are non-empty because we created our list of total stomachs by removing those records where prey_content="no" 
-
 # Plot frequency of occurance of mesopelagic prey- all predator spp
 
-The following plot is a bar plot with the frequency of occurrence values on the Y and predator spp on the X (arranged by highest FO values to lowest). This plot represents those species where mesopelagic fishes were REALLY important...can think of this as the proportion of stomachs of predator spp x
+The following plot is a bar plot with the frequency of occurrence values on the Y and predator spp on the X (arranged by highest FO values to lowest). This plot represents those species where mesopelagic fishes were were commonly encountered
 
-NOTE: In the following plots I included ALL records of mesopelagic predation (even those with only one occurance)
+NOTE: In the following plots I included ALL records of mesopelagic predation (even those with only one occurrence)
 
-```{r plot freq of occurance as a bar plot}
-
-# Predators of meso fish: all records in database 
-
-ggplot(data=FO, aes(x=reorder(predator_scientific_name, -freq_of_occurance), y=freq_of_occurance))+ #arrange spp on x based on FO in reverse order( high-low)
-    geom_col(colour="black", fill="grey", alpha=1)+
-    geom_text(aes(label=No_stomachs_with_meso), vjust=-1, size=2.5, color="navy")+
-    annotate(geom = "text", x="Sebastes flavidus", y=0.75, label="# of predators that consumed meso prey", color="navy", size=2.5)+
-    xlab("Predator taxa") + 
-    ylab("Frequency of occurance")+
-    ylim(0, 1.0)+
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), panel.background  = element_blank())
-# save plot
-ggsave("./plots/FO_all.pdf")
-
-
-```
 # Another visualization of the above: frequency of occuance of mesopelagic fish prey in predator diets
 
 ```{r FO plot for meso predators}
@@ -364,12 +243,11 @@ ggplot(data=FO)+
   #ylab("FO: Frequency of Occurance (# stomachs with meso prey/total # non-empty stomachs)")+
   theme(panel.background  = element_blank())
 
-ggsave("./plots/FO_sideways.pdf", height = 7, width=10, units = "in")
+#ggsave("./plots/FO_sideways.pdf", height = 7, width=10, units = "in")
 ```
 
 
 # Compare FO of meso fishes to that of CPS FISH
-This stems from feedback received from John Field to compare coastal pelagic fish (as well as ecosystem component spp) instead of ALL CPS since I am not including mesopelagic invertebrates
 
 From page 8-9 of https://www.pcouncil.org/documents/2019/06/cps-fmp-as-amended-through-amendment-17.pdf/
 the species to include are:
@@ -471,7 +349,7 @@ ggplot(data=FO_comp_plot) +
 
 
 # save plot
-ggsave("./plots/FO_comparison_fish.pdf", width=10, height=7, units="in")
+#ggsave("./plots/FO_comparison_fish.pdf", width=10, height=7, units="in")
 
 #remove intermediary tables when done
 rm(f, FO_comp_plot)
@@ -488,8 +366,9 @@ rm(f, FO_comp_plot)
   rename(samples_meso=No_stomachs_with_meso, samples_cps_fish=No_stomachs_with_cps_fish, samples_total=No_stomachs_total) |> #rename col headers so more straightforward
   select(predator_scientific_name, samples_total, samples_meso, FO_meso, samples_cps_fish, FO_cps_fish) |>   arrange(-FO_meso) #arrange in ascending so highest FO for meso first
 
-write.csv(fish, "FO_meso_vs_cps_fish.csv")
-rm(fish)
+fish
+#write.csv(fish, "FO_meso_vs_cps_fish.csv")
+#rm(fish)
 ```
 
 # Which pred spp have greater than 25% of stomachs with mesofish?!
@@ -502,7 +381,7 @@ over25_FO <- FO |>
   arrange(-freq_of_occurance)
 
 # export table
-write.csv(over25_FO, "over25_FO.csv")
+#write.csv(over25_FO, "over25_FO.csv")
 
 #view table
 over25_FO
@@ -525,20 +404,16 @@ length(unique(prey_composition_meso$predator_scientific_name)) #36
 
 # Of the mesopelagic fish prey, who is most commonly consumed?
 
-This is a bit challenging due to the variety of different taxa listed in the database (ie family:"myctophid" vs spp: blue lanternfish a type of Myctophid)- so not possible to compare everything at a standard spp level
+This is a bit challenging due to the variety of taxonomic resolution within the database (ie family:"myctophid" vs spp: blue lanternfish a type of Myctophid)- so not possible to compare everything at a standard spp level
 
   - Number of occurrences of each prey taxa (ie number of diet samples that each of the spp taxa groups recorded in)..but note this is not equivalent to the total number of stomachs they are found in (ie both myctophid and blue lanternfish may have been in same predator stomach, so need to combine categories to broader taxonomic groups in next step)
   
-  -However, the following plot is helpful for describing what we are actually seeing in the guts
-Just for reference: if i do total number of stomachs as opposed to distinct stomachs (code below)
 
-# Per Prey TAXA (not family level) calculate total unique counts? # of stomachs each prey taxa occurred in?
-
-# for total count use the following (as opposed to total Unique below)
-p <-prey_composition_meso %>%
-        group_by(prey_scientific_name)%>%
-        summarise(counts=n())
 ```{r frequency plot of mesopelagic prey spp}
+# Join prey taxonomic information to our prey_composition_meso df- this allows us to group by family
+
+prey_composition_meso <- left_join(prey_composition_meso, select(prey_taxonomy, "family", "genus", "prey_scientific_name"), by="prey_scientific_name")
+
 
 #Total number of distinct predators that consumed prey taxa- distinct ensures unique individual predator
 p <-prey_composition_meso %>%
@@ -554,15 +429,10 @@ ggplot(p, aes(x = reorder(prey_scientific_name, -counts), y = counts)) +
   xlab("Mesopelagic prey taxa")+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), panel.background  = element_blank())
 
-ggsave("./plots/stomachs_meso_prey.pdf", width = 10, height = 7, units = "in")
+#ggsave("./plots/stomachs_meso_prey.pdf", width = 10, height = 7, units = "in")
 
-#rm(p)
+rm(p)
 ```
-
-These counts represent the total number of unique predator diet samples that these spp (prey taxa) were found in....if we use the first version of p (total count), the total number will exceed the total number of stomachs as some individual predators may have mutliple species (prey taxa) in their stomachs at once. 
-
-this also doesn't take into account the actual # of each prey item (ie this is not the number of fish, just the # of stomachs that a given fish taxa appeared in)
-
 
 
 #  OF the mesopelagic fish prey, who is most commonly consumed? FAMILY level resolution
@@ -571,14 +441,9 @@ Family makes sense ecologically and because of identification issues in dealing 
 
 -- I selected for UNIQUE predators so a predator was only counted once if both "myctophid" and "blue lanternfish" occurred in the same predator stomach sample for ex.
 
-```{r add taxa info to prey composition data}
+```{r Plot prey types by family}
 
-# Join prey taxonomic information to our prey_composition_meso df- this allows us to group by family
-#ONLY DO THIS ONCE!!!
-prey_composition_meso <- left_join(prey_composition_meso, select(prey_taxonomy, "family", "genus", "prey_scientific_name"), by="prey_scientific_name")
-
-
-# Unique predator stomachs (ie only individual predator stomach #s, these values are less than above because 1 pred could have multiple types of prey from the same family in their guts ex. blue lanternfish + myctophid)-- use this version
+# Unique predator stomachs 
 
 prey_fam <-prey_composition_meso %>% # all identified prey that was mesopelagic
         group_by(family)%>% #this time, group by prey family (so blue lanternfish in same category as myctophid)
@@ -594,13 +459,12 @@ ggplot(prey_fam, aes(x = reorder(family, -counts), y = counts)) +
   xlab("Mesopelagic prey family")+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), panel.background  = element_blank(), axis.title.y = element_text(margin=margin(r=20))) #shifted y-axis title away form values a little bit
 
-ggsave("./plots/meso_prey_family.pdf")
+#ggsave("./plots/meso_prey_family.pdf")
 ```
 NOTE: count= # of unique stomachs each prey item appeared in (ie  total counts equal to total number of diet samples, although could also portray as total records- bc predator could contain multiple items per family per stomach). This also doesn't mean total number of fish in guts, just total number of unique predator stomachs that each family appeared in. 
 
 
 # What percentage of mesopelagic fishes would be protected with Fishery Management Council Ruling?
-John was interested in what the percentage of fishes protected would be (as this was of interest to council)
 
 I don't have absolute number of fish, rather the # of predators that consumed given prey taxa, thus the following is:
 the total # of unique predators that consumed meso fish that would be protected by ruling/
@@ -630,7 +494,6 @@ prey_composition_meso |>
 
 # 96.5%
 
-
 # TOTAL # of SPECIES covered by council decision
 # First filter for only those records that have species level information
 
@@ -641,8 +504,6 @@ non_spp <- c("Myctophidae", "Bathylagidae" , "Tactostoma" , "Notolepis", "Protom
 spp <- prey_composition_meso |> 
       filter(!(prey_scientific_name %in% non_spp)) |> 
       distinct(prey_scientific_name) # total of 44 total SPECIES (meso fish identified to species level)
-  
-  
  
 # total # of species covered under pacific fisheries managment rule: 25 out of 44 total
 prey_composition_meso |> 
@@ -655,17 +516,14 @@ prey_composition_meso |>
 ```
 
 
-
-
 NOTE That of all the records, I included ALL taxa (regardless of species, genus or family level)
 but for the percent of actual SPECIES, I first filtered by species....
 
 
 # OF THE Myctophids
-For those Myctophids that were identified to SPECIES, which were the most commonly occuring
-Use the data above to select for just the myctophids with spp info :) 
--select by family
--remove unidentified myctophids
+For those Myctophids that were identified to SPECIES, which are most commonly encountered?
+This doesn't necessarily mean they are a prefered prey, rather that they are likely more available (abundant)
+
 
 ```{r all myctophid prey}
 
@@ -689,35 +547,6 @@ all_myctophid_prey <- prey_composition_meso %>%
 # PLOT: Of the identified Myctophids, what percentatge of each species?
 This plot takes a sum of all Myctophids that were identified to spp and then determines for each identified myctophid spp, what percentage of the total it represents
 
-In this case, the percentage doesn't represent # of fish, rather # of unique predator stomachs a given species appeared in
-
-SO: percentage of unique predator stomachs with myctophid spp (of all unique pred stomachs that contained myctophids identified to spp)
-
-```{r bubble plot of Myctophid species }
-
-# Plot percentage of individual identified spp of Myctophid out of all identified to spp myctophids
-
-ggplot(data=all_myctophid_prey)+
-  geom_point(aes(x=reorder(prey_scientific_name, percent), y=percent, size=percent, color=factor(percent), alpha=percent), show.legend = F)+
-  scale_color_viridis_d()+
-  scale_size(range = c(1, 22))+ # range of bubble sizes, could play around with this
-  geom_text(aes(x=reorder(prey_scientific_name, percent), y=percent, label=percent, size=0.30), show.legend = F)+ #label with percent of total myctophids
-  ylim(c(0, 25))+ 
-  expand_limits(x=c(0, 20))+ #ensure enough room to right of bubbles
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), 
-        panel.background = element_blank(),
-        #panel.border = element_rect(fill="transparent", colour = "black"),
-        axis.title = element_blank(),
-        axis.text = element_blank(),
-        axis.ticks.y = element_blank())
-
-ggsave("./plots/myctophid_composition.pdf", width = 8, height=5, units="in")
-  
-```
-To play around with size of bubbles on plot, adjust input for scale_size(range=c(values))
-
-# Bar plot: Myctophid species
-Same info as above but as a simple bar plot (As per Steve Lindley suggestion)
 ```{r bar plot of Myctophid species }
 
 # Plot percentage of individual identified spp of Myctophid out of all identified to spp myctophids
@@ -732,17 +561,13 @@ ggplot(data=all_myctophid_prey)+
   coord_flip()+
   theme(panel.background  = element_blank())
 
-ggsave("./plots/myctophid_composition_bar.pdf", width = 8, height=5, units="in")
+#ggsave("./plots/myctophid_composition_bar.pdf", width = 8, height=5, units="in")
   
 ```
-
-
-
 
 # Who is eating who (which mesopelagic fishes by FAMILY?)
 the following code groups prey by family (ex. myctohpidae) and takes a count of which predator spp (based on scientific name) ate fish from a given family
 NOTE: that I used distinct predator id so count represents unique predator stomachs for a given predator spp
-
 
 ```{r}
 
@@ -765,10 +590,9 @@ pred_taxa_prey_fam |>
   arrange(-no_pred)
 ```
 
-NOTE: above, I initially used the No_stomachs_with_meso as my total count to calculate the fraction per family, but because there were instances where an individual predator had more than one family of mesopelagic fish in their guts, this led to a higher number of total stomachs than if we used the No_stomachs_with_meso which only counted a stomach once if it had ANY (ie all family) in guts. As a more concrete example: say an individual albacore spp had both Myctophidae and Melamphidae in its guts this would mean 2 stomachs (each were unique per family), compared to 1 for total meso stomachs because there was meseo prey. For this reason, I am going to use the sum of families instead of the No_stomachs_with_meso to calcualte our fraction. This means we describe our values as: ... OF those stomachs per family of mesopelagic prey, what fraction of each family did we find. 
+NOTE: above, I initially used the No_stomachs_with_meso as my total count to calculate the fraction per family, but because there were instances where an individual predator had more than one family of mesopelagic fish in their guts, this led to a higher number of total stomachs than if we used the No_stomachs_with_meso which only counted a stomach once if it had ANY (ie all family) in guts. 
 
 # PLOT which predators are eating which families of fishes?
-Many ways to display this info, but I think a heatmap makes the most sense?! 
 
 ```{r Of meso prey which families consumed per predator spp}
 
@@ -791,333 +615,31 @@ ggplot(data=pred_taxa_prey_fam, aes(x=family, y=as.factor(predator_scientific_na
 
 
 
-ggsave("./plots/who_eating_who.jpeg", width=8, height=7, units="in") #for some reason can't export as pdf-text issues
+#ggsave("./plots/who_eating_who.jpeg", width=8, height=7, units="in") #for some reason can't export as pdf-text issues
 
 #when done plotting remove intermittent df
-#rm(p)
 ```
  cells represent the fraction of unique predator stomachs with given meso fish family 
 
 # Individual predator spp prey? 
-The next step: For each species/taxa of predator (ie a species that has had any mesopelagic fish in gut...) select for ALL records of that given species and then look at a frequency of occurrence for mesopealgic fish in the guts of that spp. SO for each predator species, how many "guts" had mesoeplagic fish (all meso fish? then individual families, myctophids in particular!)
-
-NOTE: could certainly make a for loop out of this based on vector of all pred spp that have eaten meso fish above then circle though each individual within each spp. 
+The next step: For each species/taxa of predator (ie a species that has had any mesopelagic fish in gut...) select for ALL records of that given species and then look at a frequency of occurrence for mesopealgic fish in the guts of that spp. For each predator species, how many diet samples had mesoeplagic fish?
 
 # Mesopelagic taxon (spp and group level) instead of family
-
 ```{r}
 # Calculate the total number of unique pred stomachs with meso prey
 q <- prey_composition_meso %>%
   group_by(predator_scientific_name, prey_scientific_name)%>%
   summarize(count_per_taxon=n_distinct(predator_id), .groups ="drop")
 
-
-# export for supplemental info
-write.csv(q, file="pred_meso_prey.csv")
-  
-# simple bar chart- individual predator
-ggplot(data=filter(q, predator_scientific_name=="Pacific Bluefin Tuna" ))+
-  geom_bar(aes(x=prey_scientific_name, y=count_per_taxon), stat="identity", color="black", fill="navyblue")+
-  ylab("# of unique predator stomachs per taxon")+
-  xlab("")+
-  theme(panel.background = element_blank(),
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        axis.text.y=element_text(family = "Arial", size=7))
-
-# FOR LOOP: bar chart- for each pred spp, which meso prey did they consume (x= prey taxa, y= # of unique stomachs/taxa)
-
-spp=unique(q$predator_scientific_name)
-
-  
-for (i in 1: length(spp)){
-  
-    #select for predator spp
-    pred_spp <- q %>%
-                 filter(predator_scientific_name %in% spp[i])
-    
-    print(spp[i]) #print year
-    
-    # create plot of prey for each predator spp
-    ggplot(data=pred_spp)+
-  geom_bar(aes(x=prey_scientific_name, y=count_per_taxon), stat="identity", color="black", fill="navyblue")+
-  ylab("# of unique stomachs per prey taxon")+
-  xlab("")+
-  ggtitle(paste0(spp[i], " : mesopelagic prey taxa"))+
-  theme(panel.background = element_blank(),
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        axis.text.y=element_text(family = "Arial", size=7))
-
-   # save plot
-    ggsave(filename=paste0("./plots/pred_meso_prey/", "pred_", spp[i], ".jpeg"))
-}
-
+q
 
 ```
-I am currently planning to include this information as part of the supplemntal info 
-
-# same information, but  pie chart version...
-If I use these, I would probably include titles for predator species and percentages, but here just for reference
-```{r pie chart each pred spp}
-
-# FOR LOOP- bar chart each pred spp
-
-
-spp=unique(q$predator_scientific_name)
-
-  
-for (i in 1: length(spp)){
-  
-    #select for predator spp
-    pred_spp <- q %>%
-                 filter(predator_scientific_name %in% spp[i])
-    
-    print(spp[i]) #print year
-    
-    # create plot of prey for each predator spp
-ggplot(data=pred_spp, aes(x="", y=count_per_taxon, fill=prey_scientific_name))+
-  geom_bar(stat = "identity", width=1, color=1.5)+
-  coord_polar("y", start = 0)+
-  theme_void()
-
-   # save plot
-    ggsave(filename=paste0("./plots/pred_meso_prey/", "pie_", spp[i], ".jpeg"))
-}
-
-
-```
-
-NOTE: these are just for reference, or perhaps for the supplemental info?! # of unique pred stomachs with each mesopelagic prey item per predator spp. All output stored in pred_meso_prey could have also presented these as pie charts. Also planning to list this info in supplemental without plots (which might be easier and provide raw data which is good)
-
-
-
-
-
+ 
 # Plot a MAP of the location predators were captured at!
 
-# NOTE: not planning to publish this portion of code (due to data sensitivity as much as its messiness)- contains sensitive location info on albacore and bluefin tuna!
+# NOTE: 
+I am not including code for our maps of the location of predator collection trips because these data contain sensitive information on important predator species. 
 
-
-While we don't have location information for EACH individual predator, there is information available for each predator collection trip (ie each fishing trip, not each fish). We can thus create a plot of the location of those "trips" where mesopealgic predators were caught and compare them to those trip locations where mesopelagic predators were NOT caught (ie none of the fish sampled on a given trip had consumed mesopelagic prey)
-
-###############
-TO DO:
-JohnF: suggested it would be better to then normalize our habitat bar plot (# of obs per habitat) by the total number of observations within each habitat
-Jerome: similarly suggested that we look at the individual trips in terms of the proportion of meso's caught.
-
-Note: there are records that are missing position information (lat lon), but thankfully most locations have position info 
-187 out of 1495 have position info (before adding confidential info from Joe)...
-
-# Collection location -- what data is available 
-For each predator collection trip, we are interested in:
-Latitude, Longitude 
-
-Meso collections: food_habits_data filtered for meso fish prey species
-All collections: food_habits_data
-
-Note: there wasn't sufficient data available for fishing depth and bottom depth from the datbase, so ignoring those fields here and estimating collection bottom depth from bathymetry maps (below)
-
-```{r what position data is available }
-
-# Double check records for fishing depth equal to 0 or NA: these should be NAs, not zeros
-
-# Convert lat and lon to numeric-- all meso predator info
-food_habits_data$latitude <- as.numeric(food_habits_data$latitude)
-food_habits_data$longitude <- as.numeric(food_habits_data$longitude)
-
-# convert NaNs to NA so can filter in subsequent step
-food_habits_data$latitude <- ifelse(is.nan(food_habits_data$latitude), NA, food_habits_data$latitude)
-food_habits_data$longitude <- ifelse(is.nan(food_habits_data$longitude), NA, food_habits_data$longitude)
-
-
-# how many missing "stations" --- 187 missing stations, out of total of 1495 for meso pred position (before adding confidential info)
-```
-
-# Read confidential position information from Joe (which includes sensitive spp) for Albacore and Bluefin Tuna
-NOTE: THESE data are confidential. I am hoping that by only plotting the position of collection trips that caught meso predators avoids the need ot specifically sate where these fish were caught! In other words, not predator specific, so should be ok! 
-```{r}
-# read in position information:
-position <- read.csv("collection_information_102622.csv", header = T, sep = ",")
-str(position)
-
-# convert colnames to match exiting dfs
-position <- position |> 
-            rename(collection_id=Collection_ID)
-
-```
-
-# Add confidential position info to existing df
-food_habits_data contains ALL records
-can filter by meso_spp to select for mesopealgic prey
-
-note: position df cols: Latitude, Longitude (can distinguish from existing records)
-```{r}
-
-# if missing info in existing info, use news joined columns from Latitude an Longitude (positon) df
- 
-p$p_lat <- ifelse(is.na(p$latitude), p$Latitude, p$latitude)
-p$p_lon <- ifelse(is.na(p$longitude), p$Longitude, p$longitude)
-p |> 
-  filter(is.na(latitude))
-
-
-# Join position df to existing food_habits_data df
-food_habits_data <- left_join(food_habits_data, select(position, Latitude, Longitude, collection_id), by="collection_id")
-
-# IF missing lat or long data in food_habits_data, use lat long data from position df, columns (Latitude, Longitdue)
-food_habits_data$lat <- ifelse(is.na(food_habits_data$latitude), food_habits_data$Latitude, food_habits_data$latitude)
-food_habits_data$lon <- ifelse(is.na(food_habits_data$longitude), food_habits_data$Longitude, food_habits_data$longitude)
-
-# clean up intermediary columns: just remove columns 
-
-food_habits_data <- food_habits_data %>% select(-c(latitude, longitude, Latitude, Longitude))
-
-# note: use lat and lon as position columns 
-
-```
-   I double checked and this added in values for lat and lon for some of our missing positions (those that have sensitive positon info)
-   
-   
-# Select for non-missing lat lon data (ie no NAs)
-# AND those trips that caught meso predators and those that did not
-
-This is just to estimate the total number of collection trips (ids) total (before filtering to remove missing lat lon position)
-meso: 1495
-non meso: 8418
-total: 9913
-
-Once we remove NAs
-meso: 1404
-non meso: 7713
-total: 9117
-
-So we can say of the 1496 mesopelagic collection trips, 1404 (or 93% had position info)
-We can also say that of the 9117 total trips with position info, about 15% were mesoeplagic. 
-```{r}
-# PRIOR TO removing NAs
-# Those trips that caught predators that had eaten mesopelagic prey 
-loc_meso <-food_habits_data |> 
-  filter(prey_scientific_name %in% meso_spp)
-
-meso_trips= unique(loc_meso$collection_id)
-length(meso_trips) #total of 1495 collections of meso predators 
-
-# Those trips that caught predators that had NOT eaten mesopelagic prey
-loc_non_meso =food_habits_data |> 
-  filter(!(collection_id %in% meso_trips))
-
-non_meso_trips=unique(loc_non_meso$collection_id)
-length(non_meso_trips) #total of 8418 records in database
-
-1495/(8418+1495) # or ~15% of all collection ids had predators that had eaten meso fish 
-```
-
-# After removing NAs (meso and non-meso)
-THESE are the values I will use from here on out 
-loc_all: all food_habits_data with confidential lat lon added and filtered to remove missing positoin values
-loc_meso: loc_all filtered for meso prey (meso_spp)
-loc_non_meso: loc_all filtered for ! loc_meso collection ids
-```{r}
-# ALL position data (ie no NA for lat or lon)
-loc_all <- food_habits_data |> 
-           filter(!is.na(lat)) |> 
-           filter(!is.na(lon))
-
-length(unique(loc_all$collection_id)) # total of 9117
-
-
-# Those trips that caught predators that had eaten mesopelagic prey 
-loc_meso <-loc_all |> 
-  filter(prey_scientific_name %in% meso_spp)
-
-meso_trips= unique(loc_meso$collection_id)
-length(meso_trips) #total of 1495 collections of meso predators 
-
-
-# Those trips that caught predators that had NOT eaten mesopelagic prey
-loc_non_meso =loc_all |> 
-  filter(!(collection_id %in% meso_trips))
-
-non_meso_trips= unique(loc_non_meso$collection_id)
-length(non_meso_trips) #total of 1495 collections of meso predators 
-```
-
-# Add bathymetry data to predator collection locations
-
-Planning to use the R package {marmap} and instructions:
-https://cran.r-project.org/web/packages/marmap/vignettes/marmap-DataAnalysis.pdf
-
-Extent of all predator collections:
-(limits=c(-146, -116, 30, 55))
-```{r}
-# extent
-range(food_habits_data$lat, na.rm=TRUE) #30 --55
-range(food_habits_data$lon, na.rm=TRUE) # -145.6 -116.5
-```
-
-#load libraries
-marmap allows you to load NOAA bathy maps into r
-```{r}
-library(marmap)
-```
-
-# load bathy data for our region of interest
-The following data comes from NOAA ETOPO1 database
-limits=c(-146, -116, 30, 55) 
-resolution of the grid in minutes (default is 4)
-NOTE "increasing" resolution means decreasing the default value. I am starting with 4 for now but can decrease as needed.
-
-```{r}
-
-# download NOAA bathymetry for our region of interest resolution =1 is the highest resolution available
-
-bathy <- getNOAA.bathy(lon1 =-146 , lon2 = -115, lat1 = 30, lat2 = 55, resolution =  1 )
-
-# plot these data
-plot(bathy) #whoa cool
-
-# can create color palettes
-blues <- c("lightsteelblue4", "lightsteelblue3",
-"lightsteelblue2", "lightsteelblue1")
-greys <- c(grey(0.6), grey(0.93), grey(0.99))
-
-#plot with color
-plot(bathy, image = TRUE, land = TRUE, lwd = 0.03,
-bpal = list(c(0, max(bathy), greys),
-c(min(bathy), 0, blues)))
-
-
-# Add a coastline
-plot(bathy, n=2, lwd=0.4, add=TRUE) #hmm this also adds some strange lines around bathymetry contours that I don't totally want not sure what n does?
-```
-
-# extract depth at our points of interest
-
-get.depth() can get depth for specific lat lon pairs. 
-if distance=T, the haversine distance in km from the first data point on will also be computed. 
-```{r}
-# can view summary of data
-summary.bathy(bathy)
-
-
-# GET BATHY DATA for ALL collection trips:
-bathy_all <- get.depth(bathy, x=loc_all$lon, y=loc_all$lat, locator = FALSE, distance=FALSE)
-
-# add depth info to existing dfs
-loc_all$depth <- abs(bathy_all$depth) #note depths were in negative values so using abs() to convert to positive
-
-#note that these values differ in some cases from those in the column for Bottom_depth_m but to be expected given the varying methods and resolutions 
-
-# ADD bathy data to unique collection trips- as opposed to indiviudal records of prey and predator (ie multiple rows per collection id)
-trip_preds_bathy <- get.depth(bathy, x=trip_preds$Longitude, y=trip_preds$Latitude, locator = FALSE, distance=FALSE)
-
-# add depth info to existing dfs
-trip_preds$depth <- abs(trip_preds_bathy$depth)
-
-```
-NOTE: this df has multiple rows corresponding to each prey item and predator combination.
-If I just wanted unique positions, i could use distinct()
-Because I still need to calcualte the proportion of prey items per collection id that were mesopelagic or not, going to leave for now.. 
-Note also: didn't separate loc_meso and loc_non_meso 
 
 # Categorize by HABITAT type
 # Deal with land-based predator sampling
@@ -1245,750 +767,4 @@ ggsave("./plots/map_prop_meso.pdf")
 
 
 ```
-
-
-
-
-
-
-
-
-
-
-
-# HABITAT 
-
-# Calculate the # of samples per habitat -- as well as the number of predators? 
-both meso and non meso loc_all is everything (non NA for position)
-```{r}
-
-# first select for unique collection ids
-length(unique(loc_all$collection_id)) #total of 9085 our original value minus strandings 
-
-
-#TOTAL number of collection IDs by habitat type
-trips_per_habitat <- loc_all |> 
-                    group_by(habitat) |> # group by habitat type
-                    summarize(total_col_id_habitat=n_distinct(collection_id), .groups="drop")  # of UNIQUE collection ids
-                  
-trips_per_habitat # TOTAL # of unique collection ids per habitat-- out of 9085 total unique collection ids (trips)
-#Deep	1143			
-#Land	1051			
-#Shelf	5245			
-#Slope	1646
-
-
-# MESO number of collection IDs by habitat type
-trips_per_habitat_meso <- loc_all |> 
-                    filter(prey_scientific_name %in% meso_spp) |> 
-                    group_by(habitat) |> # group by habitat type
-                    summarize(meso_col_id_habitat=n_distinct(collection_id), .groups="drop")  # of UNIQUE collection ids
-
-trips_per_habitat_meso
-#Deep	459			
-#Land	381			
-#Shelf	86			
-#Slope	472	
-
-# list of collection ids for meso -- to select for NON meso in step below
-loc_meso <- loc_all |> 
-              filter(prey_scientific_name %in% meso_spp) 
-loc_meso_id <- unique(loc_meso$collection_id)
-
-# NON MESO number of collection IDs by habitat type
-trips_per_habitat_non_meso <- loc_all |> 
-                    filter(!(collection_id %in% loc_meso_id)) |>  #collection id NOT from meso
-                    group_by(habitat) |> # group by habitat type
-                    summarize(non_meso_col_id_habitat=n_distinct(collection_id), .groups="drop")  # of UNIQUE collection ids
-
-trips_per_habitat_non_meso
-#Deep	684			
-#Land	670			
-#Shelf	5159			
-#Slope	1174	
-
-459+684
-381+ 670
-86+5159
-472+1174
-
-# totals check out, WHEW!! 
-
-
-# OKAY, now normalize by the total number of collections PER habitat
-trips_per_habitat <- left_join(trips_per_habitat, trips_per_habitat_meso, by="habitat")
-trips_per_habitat <- left_join(trips_per_habitat, trips_per_habitat_non_meso, by="habitat")
-
-# Standardize collection ids with meso pred with total number of collection trips per habitat
-# # collection ids that collected meso/# collection ids trips total per habitat
-
-trips_per_habitat <- trips_per_habitat |> 
-  mutate(std_col_id= (meso_col_id_habitat/total_col_id_habitat)*100)
-
-rm(trips_per_habitat_meso, trips_per_habitat_non_meso)
-```
-
-# PLOT of # of observations per habitat type
-
-
-```{r}
-# reorder habitat from land to deep
-habitat_order= c("Land", "Shelf", "Slope", "Deep")
-
-# change axis labels
-habitat_labels= c("Scat (onshore)", "Shelf (0-200m)", "Slope (200-1000m)", "Deep (>1000m)")
-
-
-# Plot total number of collection trips per habitat
-ggplot(data=trips_per_habitat)+
-  geom_col(aes(x=factor(habitat), y=(meso_col_id_habitat/total_col_id_habitat)*100, fill=habitat), color="black", show.legend = F, width=1)+
-  scale_fill_manual(values=c( "darkblue", "goldenrod3", "lightcyan3", "steelblue3"))+
-  scale_x_discrete(limits=habitat_order, labels=habitat_labels)+
-  ggtitle("Percentage of collections that caught meso predators")+
-  xlab("")+
-  ylab("")+
-  theme(panel.background = element_rect(fill="transparent", color="white"),
-        rect = element_rect(fill="transparent"),
-        panel.grid = element_line(color="transparent"),
-        axis.text.x=element_text(size=12, colour= "white"),
-        axis.text.y=element_text(size=12, colour="white"),
-        plot.title = element_text(size=14, color = "white"))
-
-ggsave("./plots/habitat_compare.pdf")
-
-
-```
-# Combine map with habitat plot
-Copied and pasted code to create indivdiual plots from above and plotting below for reference in case I later want a combined plot
-```{r}
-library(ggOceanMaps)
-
-p3= basemap(data=trip_preds, bathymetry = TRUE, legends = F)+
-  scale_fill_viridis_d(option="G", direction=-1)+
-  geom_spatial_point(data=filter(trip_preds, meso_pred>0), aes(x=Longitude, y=Latitude, color=prop_meso, size=total_pred), shape=21)+
-  scale_color_fermenter(palette = 7, direction=1) +#orange scale
-  xlab("")+
-  ylab("")+
-  labs(color="% Meso", size="Total # pred")+
-  annotation_scale(location = "tr")+
-  annotation_north_arrow(location = "tr", which_north = "true", height = unit(1, "cm"),
-  width = unit(1, "cm"), pad_y = unit(0.70, "cm"))+
-  theme(panel.grid = element_blank(),
-        legend.position = c(0.92,0.52),#actual position of legend
-        legend.background = element_rect(fill="transparent"),
-        legend.key = element_rect(fill='transparent'),
-        #legend.box.background = element_rect(color="black", size=0.5), #black box around legend feature
-        legend.box.margin = margin(1, 1, 1, 1), #distance of box around points in legend
-        legend.title = element_text(size=7), # the title text
-        legend.text=element_text(size=7),
-        legend.spacing.y = unit(0.01, 'cm')) #distance between legend items
-
-p4=ggplot(data=trips_per_habitat)+
-  geom_col(aes(x=factor(habitat), y=(meso_col_id_habitat/total_col_id_habitat)*100, fill=habitat), color="black", show.legend = F, width=1)+
-  scale_fill_manual(values=c( "darkblue", "goldenrod3", "lightcyan3", "steelblue3"))+
-  scale_x_discrete(limits=habitat_order, labels=habitat_labels)+
-  ggtitle("Percentage of collections that caught meso predators")+
-  xlab("")+
-  ylab("")+
-  theme(panel.background = element_rect(fill="transparent"),
-        rect = element_rect(fill="transparent"),
-        panel.grid = element_line(color="transparent"),
-        axis.text.x=element_text(size=12, colour= "black"),
-        axis.text.y=element_text(size=12, colour="black"),
-        plot.title = element_text(size=12, color = "black"))
-
-p3+p4
-```
-
-
-
-
-
-BELOW: just for reference, not planning to include in manuscript
-# Comparing percentage mesopealgic to non mesopelagic 
-Nice way to visualize how mesopelagic compares to non mesopelagic predators
-But for simplicity, I am going to stick with just meso for now.. need to think about how I then plot the map...
-```{r}
-# Plot total number of collection trips per habitat
-ggplot(data=trips_per_habitat)+
-  geom_col(aes(x=factor(habitat), y=(meso_col_id_habitat/total_col_id_habitat)*100, fill=habitat), color="black", show.legend = F, width=1)+
-  geom_col(aes(x=factor(habitat), y=-(non_meso_col_id_habitat/total_col_id_habitat)*100, fill=habitat), color="black", show.legend = F, width=1)+
-  scale_fill_manual(values=c( "darkblue", "goldenrod3", "lightcyan3", "steelblue3"))+
-  scale_x_discrete(limits=habitat_order, labels=habitat_labels)+
-  ylim(c(-100, 100))+
-  ggtitle("Percentage of collections that caught meso predators")+
-  xlab("")+
-  ylab("")+
-  geom_hline(aes(yintercept = 0), linewidth=1.5) + #make a thick line at zero
-  theme(panel.background = element_rect(fill="transparent"),
-        rect = element_rect(fill="transparent"),
-        panel.grid = element_line(color="transparent"),
-        axis.text.x=element_text(size=12, colour="black"),
-        axis.text.y=element_text(size=12, colour="black"),
-        plot.title = element_text(size=12, color ="black"))
-
-ggsave("./plots/habitat_compare_meso_non.pdf")
-```
-
-# Amongst mesopelagic catch, look at propportions?
-Just for reference
-```{r}
-# Plot total number of collection trips per habitat
-ggplot(data=trips_per_habitat)+
-  geom_col(aes(x=factor(habitat), y=(meso_col_id_habitat/sum(meso_col_id_habitat))*100, fill=habitat), color="black", show.legend = F, width=1)+
-  scale_fill_manual(values=c( "darkblue", "goldenrod3", "lightcyan3", "steelblue3"))+
-  scale_x_discrete(limits=habitat_order, labels=habitat_labels)+
-  ggtitle("Percentage of mesopelagic collections by habitat")+
-  xlab("")+
-  ylab("")+
-  theme(panel.background = element_rect(fill="transparent"),
-        rect = element_rect(fill="transparent"),
-        panel.grid = element_line(color="transparent"),
-        axis.text.x=element_text(size=12, colour="black"),
-        axis.text.y=element_text(size=12, colour= "black"),
-        plot.title = element_text(size=12, color = "black"))
-
-ggsave("./plots/habitat_compare_std_by_meso.pdf")
-
-```
-
-# Calculate percentages of observations occuring at different habitats
-```{r}
-# Calculate percentage of mesopelagic collections that occured in each habitat (of total meso collections, where they fell between habitats) 
-trips_per_habitat
-# OF THOSE (1398) LOCATIONS WHERE MESO PREDATORS WERE COLLECTED...
-sum(trips_per_habitat$meso_col_id_habitat)
-
-# this percentage were collected "inshore" - combo of land (scat) and shelf
-(381+86)/1398 *100 ##33.4%
-# this percentage were collected "slope" 
-(472)/1398 *100 ## 33.8%
-# this percentage were collected "deep" 
-(459)/1398 *100 ## 32.8%
-
-# for ref
-# this percentage were collected "shelf"
-(86)/1398 *100 ## 6.15%
-# this percentage were collected "land"
-(381)/1398 *100 ## 27.3%
-
-
-```
-
-# proportion mesopelagic with depth
-
-```{r}
-# add depth data back for each station
-
-p <- filter(trip_preds, meso_pred>0)
-
-ggplot(data=p, aes(x=depth, y=prop_meso))+
-  geom_point()+
-  geom_smooth(method="lm", formula = y~x)
-  
-
-
-summary(lm(prop_meso ~depth, data=p))
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-   
-
-   
-   
-   
-   
-   
-   
-   BELOW this line: haven't looked at
-   
-   
-
-
-
-
-
-
-
-```{r select for trips where meso or no mesos captured}
-
-# create list of unique collection ids for mesopelagic predators 
-meso_collection_id <- unique(prey_composition_meso$collection_id)
-
-# create list of unique collection ids for non-mesopelagic predators 
-non_meso_collection_id <- unique(position$Collection_ID)
-non_meso_collection_id <- non_meso_collection_id[!non_meso_collection_id %in% meso_collection_id]
-
-
-# Select for position information for these specific collection_ids 
-non_meso_pred_location <-  position |>
-                      select(Collection_ID, Latitude, Longitude, Method, Bottom_Depth_m, Fishing_Depth_m) |> # select cols
-                      filter(Collection_ID %in% all_pred_collection_id)|> # select for mesopelagic collection id values
-                      distinct(Collection_ID, .keep_all = TRUE) # only need one record per collection_id (so select for unique collection id, and return the other columns )
-
-# had to update the data structure to select for some reason?
-meso_pred_location <-  position |> #df with all position records
-                      select(Collection_ID, Latitude, Longitude, Method, Bottom_Depth_m, Fishing_Depth_m) |> # select columns of interest
-                      filter(Collection_ID %in% meso_collection_id)|> # select for mesopelagic collection values
-                      distinct(Collection_ID, .keep_all = TRUE) # only need one record per collection_id (so select for unique collection id, and return the other columns )
-
-```
-NOTE: I could simply filter in the plots below instead of creating separate dfs for meso and non-meso predator locations, but i thought it might be easier on myself to just create separate dfs
-
-
-# Adding in a ocean basemap
-Update bounding box in add new coordinate info
-```{r}
-#install.packages("ggOceanMaps")
-#devtools::install_github("MikkoVihtakari/ggOceanMapsData")
-library(ggspatial)
-library(ggOceanMaps)
-
-# create bounding box
-# lat limits
-range(non_meso_pred_location$Latitude, na.rm =T) # 30.25, 54.76
-range(meso_pred_location$Latitude, na.rm = T) # 30.28, 53.62
-# lon limits
-range(non_meso_pred_location$Longitude, na.rm =T) # -145.6667 -116.4754
-range(meso_pred_location$Longitude, na.rm = T) #-144.3333 -117.0000
-
-# overall limits:
-basemap(limits=c(-146, -115, 30, 55))
-
-
-
-```
-
-
-# PLOT: location of capture for mesopelagic predator locations (Navy) compared to all predators in the database (grey)
-Missing 91 of 1495 locations for collection of meso predators (<10%)
-Note; not locations of individual predators, rather predator locations 
-This plot uses the package {ggOceanMaps}
-
-# MISSING DATA
-non_meso_pred_location |> 
-  filter(is.na(latitude)) # NOTE: missing 958 of 8,418 non meso locations and
-meso_pred_location |>  # 187 out of 1495 locations for meso predators (~87% of records for meso location)
-  filter(is.na(latitude))
-  
-  
-# PLOT location of predator collection locations- both meso and non-meso pred locations
-```{r Plot of meso fish predator locations compared to all predators in database}
-
-# SIMPLE map with bathymetry
-basemap(data=meso_pred_location, bathymetry = TRUE)+
-  scale_fill_viridis_d("Water depth (m)", direction=-1)+ #bathymetry
-  geom_spatial_point(data=non_meso_pred_location, aes(x=Longitude, y=Latitude), color="white", fill="white", alpha=0.25)+ # assumes crs=4326 which is correct for our data
-  geom_spatial_point(data=meso_pred_location, aes(x=Longitude, y=Latitude), color="black", fill="firebrick", shape=21)+ # assumes crs=4326 which is correct for our data
-  annotation_scale(location = "br") + #scale bar in bottom right of plot
-  annotation_north_arrow(location = "tr", which_north = "true")  #add a north arrow
-
-# export map
-ggsave("./plots/all_pred_location.pdf")
-```
-
-
-# Now plot these TWO maps seperately: 
-
-
-To plot as one image use additional package, below is just two separate plots
-require(gridExtra) otherwise just use code chucks to plot seperately
-#plot one: all predators (not meso)
-plot1 <- basemap(data=meso_pred_location, bathymetry = TRUE, legends = F)+
-  scale_fill_viridis_d("Water depth (m)", direction=-1)+
-  geom_spatial_point(data=non_meso_pred_location, aes(x=longitude, y=latitude), color="white", fill="white", alpha=0.25)+ # assumes crs=4326 which is correct for our data
-  xlab("")+
-  ylab("")+
- annotation_scale(location = "br") + 
-  annotation_north_arrow(location = "tr", which_north = "true") 
-
-# plot 2 (all meso predators)
-plot2 <- basemap(data=meso_pred_location, bathymetry = TRUE, legends = F)+
-  scale_fill_viridis_d("Water depth (m)", direction=-1)+
-  geom_spatial_point(data=meso_pred_location, aes(x=longitude, y=latitude), color="black", fill="firebrick", shape=21)+ # assumes crs=4326 which is correct for our data
-  xlab("")+
-  ylab("")+
- annotation_scale(location = "br") + 
-  annotation_north_arrow(location = "tr", which_north = "true") 
-
-
-grid.arrange(plot1, plot2, ncol=2)
-
-```{r plot meso predators and non meso predators }
-
-#plot one: all predators (not meso)-- IGNORE
-basemap(data=meso_pred_location, bathymetry = TRUE, legends = F)+
-  scale_fill_viridis_d("Water depth (m)", direction=-1)+
-  geom_spatial_point(data=non_meso_pred_location, aes(x=Longitude, y=Latitude), color="black", fill="white", alpha=0.90)+ # assumes crs=4326 which is correct for our data
-  xlab("")+
-  ylab("")+
- annotation_scale(location = "br") + 
-  annotation_north_arrow(location = "tr", which_north = "true") 
-
-# export map
-ggsave("./plots/non_meso_pred_location.pdf")
-
-# (all meso predators)
-basemap(data=meso_pred_location, bathymetry = TRUE, legends = F)+
-  scale_fill_viridis_d("Water depth (m)", direction=-1)+
-  geom_spatial_point(data=meso_pred_location, aes(x=Longitude, y=Latitude), color="black", fill="firebrick", shape=21)+ # assumes crs=4326 which is correct for our data
-  xlab("")+
-  ylab("")+
- annotation_scale(location = "br") + 
-  annotation_north_arrow(location = "tr", which_north = "true") +
-  theme(panel.grid = element_blank())
-# export map
-ggsave("./plots/meso_pred_location.pdf")
-
-```
-# (all meso predators)
-basemap(data=meso_pred_location, bathymetry = TRUE, legends = F)+
-  scale_fill_viridis_d("Water depth (m)", direction=-1)+
-  geom_spatial_point(data=meso_pred_location, aes(x=Longitude, y=Latitude), color="black", fill="firebrick", shape=21)+ # assumes crs=4326 which is correct for our data
-  xlab("")+
-  ylab("")+
- annotation_scale(location = "br") + 
-  annotation_north_arrow(location = "tr", which_north = "true") 
-# export map
-ggsave("./plots/meso_pred_location.pdf")
-
-
-
-
-# Side example: SWORDFISH that ate meso fish, what depth? 
-Late addition 1/9/23
-Would like to demonstrate that meso fish are particular important for fish over slope and beyond?
-
-OF the swordfish that consumed meso prey, what depth were they at? 
-
-```{r swordfish that ate meso fish }
-# select for swordfish? 266 records of fish and prey (not indivdiual pred)
-sword_meso <- prey_composition_meso |> #this is prey records containing meso fish
-  filter(predator_scientific_name=="Xiphias gladius") #select for Swordfish
-
-length(unique(sword_meso$predator_id)) #145 total swordfish had consumed meso fish
-
-# select for these collection_ids (for these records, where caught and at what depth)
-tip_sword_meso <- trip_mesos %>%
-  filter(Collection_ID %in% sword_meso$collection_id) # 106 individual collection trip locations
-  
-mean(tip_sword_meso$Depth)
-```
-
-Of the 106 trip collection trips that caught swordfish that had consumed mesopelagic fish, the mean dpeth was 1.724 m (in m) 
-
-# BLUEFIN: that ate meso fish, what depth?
-
-```{r bluefin tuna that ate meso fish }
-# select for swordfish? 266 records 
-blue_meso <- prey_composition_meso |> 
-  filter(predator_scientific_name=="Thunnus orientalis") 
-
-length(unique(blue_meso$predator_id)) #116 total bluefin had consumed meso fish
-
-#Total # of fish in database
-blue_total <- food_habits_data %>% #this is the df with ALL pred prey records not just meso
-  filter(predator_scientific_name=="Thunnus orientalis") #2,434 records but mutlipel prey per indivdiual bluefin tuna in database
-
-length(unique(blue_total$predator_id)) #721 (so 116 out of 721 or ~16%)
-
-# select for these collection_ids to determine mean depth of those fish that ate mesos
-trip_blue_meso <- trip_mesos %>%
-  filter(Collection_ID %in% blue_meso$collection_id) # 106 individual collection trip locations
-  
-mean(trip_blue_meso$Depth) #12931
-```
-
-# ALBACORE: that ate meso fish, what depth?
-```{r Albacore that ate meso fish }
-# select for albacore? 
-albacore_meso <- prey_composition_meso |> 
-  filter(predator_scientific_name=="Thunnus alalunga") 
-
-length(unique(albacore_meso$predator_id)) #142 total albacore had consumed meso fish
-
-#Total # of fish in database
-albacore_total <- food_habits_data %>%
-  filter(predator_scientific_name=="Thunnus alalunga") #2,434 records but mutlipel prey per indivdiual bluefin tuna in database
-
-length(unique(albacore_total$predator_id)) #750 (so 142 out of 750 or ~19%)
-
-# select for these collection_ids
-trip_albacore_meso <- trip_mesos %>%
-  filter(Collection_ID %in% albacore_meso$collection_id) # 106 individual collection trip locations
-  
-mean(trip_albacore_meso$Depth) #12931
-```
-142/750
-
-
-
-
-
-
-
-
-Using scale_x_discrete (limits = ...) to specify the order of bars.
-
-positions <- c("Goalkeeper", "Defense", "Striker")
-p <- ggplot(theTable, aes(x = Position)) + scale_x_discrete(limits = positions)
-
-
-
-
-
-
-
-# Calculate mean depth for non meso and meso fish?
-
-```{r}
-mean(meso_pred_loc_bathy$Depth) #924.29
-median(meso_pred_loc_bathy$Depth) #550m
-#mean(meso_pred_loc_bathy$Fishing_Depth_m, na.rm=T) # 363- dont use 
-meso_pred_loc_bathy |> 
-  filter(Depth<=200)
-
-
-meso_pred_loc_bathy |> 
-  filter(is.na(Fishing_Depth_m)) #1,011 missing records out of 1404 so not very representative! 
-
-mean(non_meso_pred_loc_bathy$Depth) #329.54
-median(non_meso_pred_loc_bathy$Depth) #88m
-#mean(non_meso_pred_loc_bathy$Fishing_Depth_m, na.rm = T) #159
-
-
-
-# PLOT DISTRIBUTION of meso and non-meso depths!
-# need to combine into one df? 
-
-ggplot()+
-  geom_density(data=meso_pred_loc_bathy, aes(x=Depth), color="darkblue")+
-  geom_density(data=non_meso_pred_loc_bathy, aes(x=Depth), color="black")
-
-# plot seperately?
-ggplot()+
-  geom_density(data=meso_pred_loc_bathy, aes(x=Depth), color="black", fill="darkblue", alpha=0.75)+
-  theme(panel.background = element_blank())
-
-# non meso predators
-ggplot()+
-  geom_density(data=non_meso_pred_loc_bathy, aes(x=Depth), color="black", fill="grey", alpha=0.75)+
-  theme(panel.background = element_blank())
-
-
-# combine meso and non meso predators into one dataset for legend 
-meso_pred_loc_bathy$pred_type <- "meso"
-non_meso_pred_loc_bathy$pred_type <- "non meso"
-non_and_meso_pred <- rbind(meso_pred_loc_bathy, non_meso_pred_loc_bathy)
-
-# manually create a bin for values greater than 2500-- create new col
-non_and_meso_pred <- non_and_meso_pred |> 
-  mutate(Depth_bin_over2500= ifelse(test=Depth>=2500, 2500, Depth)) # set all values greater than or equal to 2500 as 3000 (this is just an arbitrary value so they group in the same bin)
-
-
-
-# HISTOGRAM  plot of meso and non-meso depth locations
-ggplot()+
-  geom_histogram(data=non_and_meso_pred, aes(x=Depth,  y=..density.., fill=pred_type), binwidth=1, alpha=0.90, breaks=c(0, 50, 100, 200, 500, 1000, 2000, 5000))+
-  scale_fill_manual(values = c("darkblue", "grey"))+ # set colors
-  guides(fill=guide_legend(title = "Predator type"))
-  #scale_x_continuous(breaks = seq(min(non_and_meso_pred$Depth), max(non_and_meso_pred$Depth), by=200))+ # to lable every 200m
-  #scale_x_continuous(limits=c(0, 2000), breaks = c(50, 100, 150, 200, 250, 500, 1000, 1500, 2000), expand=c(0,0))
-  #theme(panel.background = element_blank(), axis.text.x=element_text(angle=90))
-
-
-```
-
-# combine meso and non-meso predators
-ggplot(data=non_and_meso_pred)+
-  geom_histogram(aes(x=Depth, y=..density.., group=pred_type, fill=pred_type), alpha=0.6, position="identity", breaks=c(50, 150, 200, 250, 500, 1000, 2000, 5000))+
-  scale_fill_manual(values = c("midnightblue", "chocolate")) #won't update colors?
-geom_density(aes(x=Depth, fill=pred_type))
-
-ggplot(data=non_and_meso_pred, aes(x=Depth, y=..density.., group = pred_type, height = ..density..)) +
-  geom_density(stat = "density", trim = TRUE)+
-  scale_x_continuous(expand=c(0,0))
-
-
-```{r}
-# Density plot of meso and non-meso depth locations
-ggplot()+
-  geom_density(data=non_and_meso_pred, aes(x=Depth,  fill=pred_type), alpha=0.90)+
-  scale_fill_manual(values = c("darkblue", "grey"))+ # set colors
-  guides(fill=guide_legend(title = "Predator type"))+
-  #scale_x_continuous(breaks = seq(min(non_and_meso_pred$Depth), max(non_and_meso_pred$Depth), by=200))+ # to lable every 200m
-  scale_x_continuous(limits=c(0, 2000), breaks = c(50, 100, 150, 200, 500, 1000, 2000), expand=c(0,0))
-  #theme(panel.background = element_blank(), axis.text.x=element_text(angle=90))
-
-
-ggsave("./plots/depth_dist.pdf")
-
-#,axis.text.x = element_text(angle=90)
-
-
-# changing bins
-
-ggplot(data=non_and_meso_pred, aes(x=Depth_bin_over2500, fill=pred_type)) + 
-  stat_bin(aes(y=..density..),  breaks=c(0, 250, 500, 1000, 1500, 2000, 3000), position = "identity", alpha=0.6)+
-  scale_fill_manual(values = c("darkblue", "grey"))+# set colors
-  scale_x_continuous(expand= c(0,0), breaks=c(0, 250, 500, 1000, 1500, 2000, 3000), labels= c("0", "250", "500", "1000", "1500", "2000", ">2500"))+
-  scale_y_continuous(expand=c(0,0))+
-  xlab("")+
-  theme(panel.backgroun=element_blank())
-
-ggsave("./plots/depth_dist.pdf")
-
-```
-
-##########################
-ILY YOU ARE HERE: need to play around with the bin widths (I changed binning, but wasn't able to change the corresponding bin width)
-I can change the limits to only show to a depth of 2000 for example but what I would like to do is display these values, but in the same width as the other bins. Hmmmmm 
-Maybe 50, 150, 200, 500, 1000, 2000, 5000
-
-Would also like to plot mesopelagic distribution ON TOP of non-meso (blue on top of grey)
-aes_group_order()
-
-
-# re-create final maps but colored by depth?! 
-
-```{r}
-{plot(bathy, image = TRUE, land = TRUE, lwd = 0.03,
-bpal = list(c(0, max(bathy), greys),
-c(min(bathy), 0, blues)))
-points(non_and_meso_pred$Longitude, non_and_meso_pred$Latitude,  pch=21, col="black", bg="white", cex=1)}
-
-```
-
-geom can be "contour" or "tile" or "raster" image
-```{r}
-
-library(ggspatial)
-
-# plot NOAA bathymetry from marmap in ggplot 
-autoplot(x=bathy, geom="tile", coast=TRUE, show.legend=FALSE)+
-scale_fill_gradient2(low="dodgerblue4", mid="gainsboro", high="darkgreen") #change color scale
-#scale_fill_etopo()
-
-#then add our datapoints colored by non and meso pred 
-last_plot()+
-  geom_point(data=non_meso_pred_loc_bathy, aes(x=Longitude, y=Latitude), fill="grey", shape=21, size=1.5)+
- geom_point(data=meso_pred_loc_bathy, aes(x=Longitude, y=Latitude), fill="red", shape=21, size=1.5)+
-  xlab("")+
-  ylab("")+
-  theme(panel.background = element_blank())
-  #ggspatial::annotation_scale(location = "bl") + 
-  #ggspatial::annotation_north_arrow(location = "tr", which_north = "true", height=unit(1, "cm"), width=unit(1, "cm")) 
-# need to convert to geom_sf (sf object to have meaningful north arrow and scale bars but those won't plot with our basemap )
-
-ggsave("./plots/final_map.pdf")
-
-
-
-
-```
-To plot from lat lon data direcly instead of sf objects
-#then add our location data- as lat lon
-
-st_as_sf(meso_pred_loc_bathy, coords=c(Longitude, Latitude), crs=4326)
-
-geom_sf
-
-
-
-# Plot as separate maps:
-```{r}
-# plot NOAA bathymetry from marmap in ggplot 
-autoplot(x=bathy, geom="tile", coast=TRUE, show.legend=FALSE)+
-scale_fill_gradient2(low="dodgerblue4", mid="gainsboro", high="darkgreen") #change color scale
-#scale_fill_etopo()
-
-#non meso pred 
-last_plot()+
-  geom_point(data=non_meso_pred_loc_bathy, aes(x=Longitude, y=Latitude), fill="grey", shape=21, size=1.5)+
-  xlab("")+
-  ylab("")+
-  theme(panel.background = element_blank())
-  #ggspatial::annotation_scale(location = "bl") + 
-  #ggspatial::annotation_north_arrow(location = "tr", which_north = "true", height=unit(1, "cm"), width=unit(1, "cm")) 
-# need to convert to geom_sf (sf object to have meaningful north arrow and scale bars but those won't plot with our basemap )
-
-ggsave("./plots/non_meso_map.pdf")
-
-
-# meso pred
-# plot NOAA bathymetry from marmap in ggplot 
-autoplot(x=bathy, geom="tile", coast=TRUE, show.legend=FALSE)+
-scale_fill_gradient2(low="dodgerblue4", mid="gainsboro", high="darkgreen") #change color scale
-#scale_fill_etopo()
-last_plot()+
- geom_point(data=meso_pred_loc_bathy, aes(x=Longitude, y=Latitude), fill="red", shape=21, size=1.5)+
-  xlab("")+
-  ylab("")+
-  theme(panel.background = element_blank())
-  #ggspatial::annotation_scale(location = "bl") + 
-  #ggspatial::annotation_north_arrow(location = "tr", which_north = "true", height=unit(1, "cm"), width=unit(1, "cm")) 
-# need to convert to geom_sf (sf object to have meaningful north arrow and scale bars but those won't plot with our basemap )
-
-ggsave("./plots/meso_map.pdf")
-```
-# plot with color corresponding to depth
-```{r}
-ggplot()+
- geom_point(data=meso_pred_loc_bathy, aes(x=Longitude, y=Latitude, fill=Depth), shape=21, size=1.5)+
-  scale_fill_viridis_c(direction=-1)+
-  xlab("")+
-  ylab("")+
-  theme(panel.background = element_blank())
-```
-
-
-
-
-
-
-
-
-
-
-# DESCRIBE fishing and bottom depths: just for ref, not enough data!
-
-AT the moment, there doesn't seem to be enough information here on fishing depth and botom depth to justify its inclusion. Maybe check with Joe about scat samples (depth of 0) and surface trawls? but really not comfortable including this with the info available now. Can draw similar conclusions from looking at map. 
-I am also interested in looking at the dates of capture, capture type and depth of gear
-```{r}
-#mean fishing depth for meso and non-meso trips
-mean(meso_pred_loc$Fishing_Depth_m, na.rm=T) # meso pred
-mean(pred_loc$Fishing_Depth_m, na.rm = T) # all pred
-
-# mean bottom depth 
-mean(meso_pred_loc$Bottom_Depth_m, na.rm = T) # meso pred
-mean(pred_loc$Bottom_Depth_m, na.rm = T) # all pred
-
-# shallowest depth
-min(meso_pred_loc$Bottom_Depth_m)
-
-```
-NOTE: for both latitude and longitude as well as Fishing_Depth_m and Bottom_Depth_m, there are many zeros in the database. I don't actually think these values are 0 (for lat lon purposes that would place them somewhere in Africa). I think what is happening here is that they are meant to be NA values. I will need to ask Joe about this. If I update the 0 values to NA values and recalcualte these values I get: (line 843....)
-I emailed Joe 10/24/22 and am awaiting a reply! 
-
-
-
-
-
 
